@@ -111,6 +111,34 @@ app.get('/api/tempLedgers', async (req, res) => {
 });
 
 /* 
+  ✅ GET /api/getBankDetails
+  Fetch distinct bank details (bank names) from the ledger table,
+  extracting the "BankAccounts" key from the extra_data JSON column.
+*/
+app.get('/api/getBankNames', async (req, res) => {
+  try {
+    const company = req.query.company;
+    if (!company) return res.status(400).json({ error: 'Company query parameter is required' });
+    
+    const sql = `
+      SELECT DISTINCT l.description AS bank_name
+      FROM ledgers l
+      WHERE l.company_id = $1
+      AND l.extra_data->>'PARENT' = 'Bank Accounts'
+    `;
+    
+    const result = await pool.query(sql, [company]);
+    res.json({ bank_names: result.rows.map(row => row.bank_name) });
+  } catch (err) {
+    console.error('Error fetching bank names:', err.message);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+
+
+
+/* 
   ✅ POST /api/saveData
   Save reviewed ledger data from the temporary table to the actual ledgers table.
 */
@@ -142,7 +170,7 @@ app.post('/api/sendToTally', async (req, res) => {
     const result = await pool.query(`SELECT description, closing_balance FROM ledgers WHERE company_id = $1`, [company]);
     if (result.rows.length === 0) return res.status(404).json({ error: "No data found" });
 
-    const response = await axios.post('http://localhost:5000/sendToTally', {
+    const response = await axios.post('http://127.0.0.1:5000/api/tallyConnector', {
       company,
       ledgers: result.rows
     });
